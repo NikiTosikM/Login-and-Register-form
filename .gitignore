@@ -4,3 +4,7 @@ venv
 
 # env
 .env
+
+
+# migrations
+alembic/migrations/versions/*
