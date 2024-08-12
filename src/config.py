@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     HOST: str
     PORT: str
     DATABASE_NAME: str
+    SECRET_JWT: str
+    JWT_ALGORITHM: str
 
     def connect_db(self):
         return  f"postgresql+asyncpg://{self.USER_DATABASE}:{self.USER_PASSWORD}@{self.HOST}:{self.PORT}/{self.DATABASE_NAME}"

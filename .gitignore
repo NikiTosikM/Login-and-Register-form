@@ -6,5 +6,10 @@ venv
 .env
 
 
+src\__pycache__
+src\auth\__pycache__
+
+
 # migrations
 alembic/migrations/versions/*
+
