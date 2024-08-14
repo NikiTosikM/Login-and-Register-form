@@ -16,6 +16,8 @@ import jwt
 
 from config import setting
 
+from datetime import datetime, timezone, timedelta
+
 
 async def hashing_password(password: str):
     salt = bcrypt.gensalt()
@@ -34,7 +36,6 @@ async def create_or_none_user(user: UserModel):
     
 
 async def check_login(email, password:str):
-    try: 
         async for session in create_session():
             query = (select(UserModel)
                 .where(
@@ -47,14 +48,14 @@ async def check_login(email, password:str):
                 raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, \
                     detail="Check the correctness of the entered data")
             return user
-        
-    except SQLAlchemyError:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred on the database side")
     
 
 def create_jwt_token(user:UserModel):
-    dates = {"id": user.id, "email": user.email}
+    dates = {
+        "id": user.id, 
+        "email": user.email,
+        "exp": datetime.now(tz=timezone.utc) + timedelta(seconds=10)
+    }
     token = jwt.encode(dates, setting.SECRET_JWT, setting.JWT_ALGORITHM)
 
     return token
@@ -70,10 +71,20 @@ def get_token(request:Request):
 
 
 async def check_token(token = Depends(get_token)):
-    dates: dict = jwt.decode(token, setting.SECRET_JWT, \
-        algorithms=setting.JWT_ALGORITHM)
-    id, email = dates["id"], dates["email"]
+    try:
+        dates: dict = jwt.decode(token, setting.SECRET_JWT, \
+            algorithms=setting.JWT_ALGORITHM)
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, \
+            detail="Invalid token")
+    
+    exp_unix = dates.get("exp")
+    exp_date = datetime.fromtimestamp(exp_unix, tz=timezone.utc)
+    if (not exp_date) or (exp_date< datetime.now(tz=timezone.utc)):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
 
+    id = dates.get("id")
+    email = dates.get("email")
     async for session in create_session():
         query = (select(UserModel)
             .where(
@@ -85,9 +96,9 @@ async def check_token(token = Depends(get_token)):
         )      
         result = await session.execute(query)
         user = result.scalars().first()
-        if not user:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, \
-                detail="User not found")
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, \
+        detail="User not found")
             
     return token
         
