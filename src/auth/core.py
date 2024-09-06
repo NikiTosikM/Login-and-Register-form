@@ -4,7 +4,7 @@ import bcrypt
 from database import create_session
 
 from sqlalchemy import select, and_
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 from models import UserModel
@@ -54,7 +54,7 @@ def create_jwt_token(user:UserModel):
     dates = {
         "id": user.id, 
         "email": user.email,
-        "exp": datetime.now(tz=timezone.utc) + timedelta(seconds=10)
+        "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=1)
     }
     token = jwt.encode(dates, setting.SECRET_JWT, setting.JWT_ALGORITHM)
 
@@ -70,7 +70,10 @@ def get_token(request:Request):
     return token
 
 
-async def check_token(token = Depends(get_token)):
+async def check_token(
+        token = Depends(get_token),
+        session:AsyncSession = Depends(create_session)
+    ):
     try:
         dates: dict = jwt.decode(token, setting.SECRET_JWT, \
             algorithms=setting.JWT_ALGORITHM)
@@ -79,23 +82,29 @@ async def check_token(token = Depends(get_token)):
             detail="Invalid token")
     
     exp_unix = dates.get("exp")
-    exp_date = datetime.fromtimestamp(exp_unix, tz=timezone.utc)
-    if (not exp_date) or (exp_date< datetime.now(tz=timezone.utc)):
+    if exp_unix is not None:
+        exp_date = datetime.fromtimestamp(exp_unix, tz=timezone.utc)
+        if (not exp_date) or (exp_date< datetime.now(tz=timezone.utc)):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
+    else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
 
     id = dates.get("id")
     email = dates.get("email")
-    async for session in create_session():
-        query = (select(UserModel)
-            .where(
-                and_(
-                    UserModel.id == id,
-                    UserModel.email == email    
-                )
+    if (not id) or (not email) or (type(id) != int) or (type(email) != str): 
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, \
+        detail="User not found")
+    
+    query = (select(UserModel)
+        .where(
+            and_(
+                UserModel.id == id,
+                UserModel.email == email    
             )
-        )      
-        result = await session.execute(query)
-        user = result.scalars().first()
+        )
+    )      
+    result = await session.execute(query)
+    user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, \
         detail="User not found")
