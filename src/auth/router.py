@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, \
-    status, Response, Depends
+     Response, Depends
 
 from .schemas import User, UserReturned, CheckDatesUser
 
@@ -10,6 +10,10 @@ from .core import hashing_password, create_or_none_user, \
 
 from database import create_session
 
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -32,6 +36,8 @@ async def register(dates: User):
         session.add(query)
         await session.commit()
 
+    logger.info('Пользователь зарегистрировался')
+
     return dates
 
 
@@ -43,12 +49,16 @@ async def login(dates:CheckDatesUser, responce:Response = Response()):
     token = create_jwt_token(user)
     responce.set_cookie(key="token_user", value=token, path="/")
 
+    logger.info('Пользователь вошел в систему')
+
     return {"status": "ok", "message": f"{user.name} вошел в систему"}
 
 
 @router.get("/logout")
 async def logout(responce:Response):
     responce.delete_cookie(key="token_user")
+
+    logger.info('Пользователь вышел из системы')
 
     return {"message": "User logged out"}
 

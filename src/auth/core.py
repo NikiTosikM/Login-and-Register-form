@@ -18,6 +18,11 @@ from config import setting
 
 from datetime import datetime, timezone, timedelta
 
+import logging
+
+
+
+logger = logging.getLogger(__name__)
 
 async def hashing_password(password: str):
     salt = bcrypt.gensalt()
@@ -36,18 +41,21 @@ async def create_or_none_user(user: UserModel):
     
 
 async def check_login(email, password:str):
-        async for session in create_session():
-            query = (select(UserModel)
-                .where(
-                    UserModel.email==email
-                )
+    async for session in create_session():
+        query = (select(UserModel)
+            .where(
+                UserModel.email==email
             )
-            result = await session.execute(query)
-            user: UserModel = result.scalars().first()
-            if not user or not checkpw(password.encode("utf-8"), user.hashed_password):
-                raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, \
-                    detail="Check the correctness of the entered data")
-            return user
+        )
+        result = await session.execute(query)
+        user: UserModel = result.scalars().first()
+        if not user or not checkpw(password.encode("utf-8"), user.hashed_password):
+            raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, \
+                detail="Check the correctness of the entered data")
+        
+        logger.debug('Данные для входа прошли проверку')
+
+        return user
     
 
 def create_jwt_token(user:UserModel):
@@ -57,6 +65,8 @@ def create_jwt_token(user:UserModel):
         "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=1)
     }
     token = jwt.encode(dates, setting.SECRET_JWT, setting.JWT_ALGORITHM)
+
+    logger.debug('Токен создан')
 
     return token
 
@@ -81,6 +91,8 @@ async def check_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, \
             detail="Invalid token")
     
+    logger.debug('Токен успешно найден')
+    
     exp_unix = dates.get("exp")
     if exp_unix is not None:
         exp_date = datetime.fromtimestamp(exp_unix, tz=timezone.utc)
@@ -95,6 +107,8 @@ async def check_token(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, \
         detail="User not found")
     
+    logger.debug('Параметры токена прошли проверку')
+    
     query = (select(UserModel)
         .where(
             and_(
@@ -108,6 +122,8 @@ async def check_token(
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, \
         detail="User not found")
+    
+    logger.debug('Токен пользователя верен')
             
     return token
         

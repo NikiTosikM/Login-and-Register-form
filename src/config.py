@@ -1,5 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+import os
+
+
 class Settings(BaseSettings):
     USER_DATABASE: str
     USER_PASSWORD: str
@@ -9,10 +12,16 @@ class Settings(BaseSettings):
     SECRET_JWT: str
     JWT_ALGORITHM: str
 
+    TEST_USER_DATABASE: str
+    TEST_USER_PASSWORD: str
+    TEST_HOST: str
+    TEST_PORT: str
+    TEST_DATABASE_NAME: str
+
     def connect_db(self):
         return  f"postgresql+asyncpg://{self.USER_DATABASE}:{self.USER_PASSWORD}@{self.HOST}:{self.PORT}/{self.DATABASE_NAME}"
     
-    model_config = SettingsConfigDict(env_file="../.env")
+    model_config = SettingsConfigDict(env_file=os.path.join(os.getcwd(), ".env"))
 
 
 setting = Settings()
